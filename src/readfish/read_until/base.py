@@ -493,6 +493,7 @@ class ReadUntilClient(object):
         if accepted_first_chunk_classifications:
             setup["accepted_first_chunk_classifications"] = [
                 self.lookup_read_class[k] for k in accepted_first_chunk_classifications
+                if k in self.lookup_read_class
             ]
 
         # see note at top of this module
