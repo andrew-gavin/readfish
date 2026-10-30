@@ -471,6 +471,8 @@ class Action(Enum):
     stop_receiving = "stop_receiving"
     #: Sample another chunk of data
     proceed = "proceed"
+    #: Keep sequencing and lock the channel state while the read continues
+    lock = "lock"
 
 
 @attrs.define

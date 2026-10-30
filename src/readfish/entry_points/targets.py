@@ -101,6 +101,7 @@ from readfish._cli_args import DEVICE_BASE_ARGS, Chemistry
 from readfish._read_until_client import RUClient
 from readfish._config import Action, Conf, make_decision, _Condition
 from readfish._statistics import ReadfishStatistics
+from readfish._channel_lock import ChannelLocker, conf_uses_lock ## DynamicLock logic
 from readfish.__about__ import __version__
 from readfish._compatibility import (
     _get_minknow_version,
@@ -234,6 +235,11 @@ class Analysis:
         # Keep track of previous alignments
         self.duplex_tracker = DuplexTracker()
 
+        # Lock channel states for reads accepted with Action.lock
+        self.locker = ChannelLocker(self.client, self.logger)
+        if conf_uses_lock(self.conf):
+            self.locker.validate()
+
         # We assume that sequencing is already running.
         # If the run is not in sequencing phase when the read until loop starts will
         # be set to false and the first read seen can be unblocked.
@@ -355,7 +361,7 @@ class Analysis:
             self.chemistry is Chemistry.DUPLEX
             # Easy checks first, so wdon't do more complex processing unless we have to
             and action == Action.unblock
-            and previous_action is Action.stop_receiving
+            and previous_action is (Action.stop_receiving, Action.lock)
         ):
             # Check if we think this read is possibly duplex
             possible_duplex = any(
@@ -417,8 +423,18 @@ class Analysis:
             else:
                 unblock_batch_action_list.append((result.channel, result.read_id))
 
+        elif action is Action.lock:
+            if self.dry_run:
+               # leave channel state alone and let the read sequence
+               action_overridden = True
+               stop_receiving_action_list.append((result.channel, result.read_id)) 
+        else:
+            # Keep receiving chunks so the lease can be renewed
+            self.locker.request(result.channel, result.read_id)
+
+
         # If we have made a final decision for this read and we shouldn't see it again!
-        if action is Action.unblock or action is Action.stop_receiving:
+        if action is Action.unblock or action is Action.stop_receiving or action is Action.lock:
             # Add decided Action
             self.previous_action_tracker.add_action(result.channel, action)
             # Add duplex based tracking if we are in duplex mode
@@ -485,6 +501,8 @@ class Analysis:
             stop_receiving_action_list = []
 
             chunks = self.client.get_read_chunks(self.client.channel_count, last=True)
+            # Renew leases for lock-holding reads and skip basecalling them
+            chunks = self.locker.filter_chunks(chunks)
             calls = self.caller.basecall(
                 chunks, self.client.signal_dtype, self.client.calibration_values
             )
@@ -547,6 +565,7 @@ class Analysis:
                 unblock_batch_action_list, duration=self.unblock_duration
             )
             self.client.stop_receiving_batch(stop_receiving_action_list)
+            self.locker.flush()
 
             t1 = timer()
             if number_reads > 0:
@@ -681,6 +700,7 @@ If there isn't a newer version of readfish and readfish is failing, please open 
         pass
     finally:
         read_until_client.reset()
+        worker.locker.release_all()
 
     send_message(
         read_until_client.connection,
