@@ -367,7 +367,7 @@ class Analysis:
             self.chemistry is Chemistry.DUPLEX
             # Easy checks first, so wdon't do more complex processing unless we have to
             and action == Action.unblock
-            and previous_action is (Action.stop_receiving, Action.lock)
+            and previous_action in (Action.stop_receiving, Action.lock)
         ):
             # Check if we think this read is possibly duplex
             possible_duplex = any(
@@ -393,7 +393,7 @@ class Analysis:
         # Duplex
         elif (
             self.chemistry is Chemistry.DUPLEX_SIMPLE
-            and previous_action is Action.stop_receiving
+            and previous_action in Action.stop_receiving
             and action is Action.unblock
         ):
             previous_decision_allowed = (
@@ -434,9 +434,9 @@ class Analysis:
                # leave channel state alone and let the read sequence
                action_overridden = True
                stop_receiving_action_list.append((result.channel, result.read_id)) 
-        else:
-            # Keep receiving chunks so the lease can be renewed
-            self.locker.request(result.channel, result.read_id)
+            else:
+                # Keep receiving chunks so the lease can be renewed
+                self.locker.request(result.channel, result.read_id)
 
 
         # If we have made a final decision for this read and we shouldn't see it again!
