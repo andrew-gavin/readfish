@@ -107,7 +107,7 @@ class ChannelLocker:
                 if lease.read_id == read.id:
                     lease.expiry = now + self.lease_seconds
                     continue
-                self.to_unlock.add(channel)
+                self._end_lease(channel)
             # Drop a pending lock request whose read has already ended
             if self.to_lock.get(channel, read.id) != read.id:
                 del self.to_lock[channel]
@@ -129,7 +129,7 @@ class ChannelLocker:
                 now > lease.expiry
                 or now - lease.locked_at > self.max_hold_seconds
             ):
-                self.to_unlock.add(channel)
+                self._end_lease(channel)
                 released.append((channel, lease.read_id))
         # Released reads are no longer protected. Stop receiving their data so
         #   readfish never evaluates (and possibly unblocks) them again.
@@ -153,12 +153,14 @@ class ChannelLocker:
             ):
                 now = time.monotonic()
                 for channel in channels:
-                    self.held[channel] = _Lease(
-                        self.to_lock[channel], now + self.lease_seconds, now
-                    )
+                    read_id = self.to_lock[channel]
+                    self.held[channel] = _Lease(read_id, now + self.lease_seconds, now)
                     # A new lock on the channel replaces any pending unlock
                     self.to_unlock.discard(channel)
+                    self.client.protected_reads[channel] = read_id
                 self.to_lock.clear()
+
+
 
     def release_all(self) -> None:
         """Unlock every channel readfish has locked. Called on shutdown."""
@@ -169,9 +171,15 @@ class ChannelLocker:
             self._call(
                 self.client.connection.data.unlock_channel_states, channels=channels
             )
+        self.client.protected_reads.clear()
         self.held.clear()
         self.to_lock.clear()
         self.to_unlock.clear()
+    
+    def _end_lease(self, channel: int) -> None:
+        """Stop protecting the read on ``channel`` and queue the channel for unlock."""
+        self.client.protected_reads.pop(channel, None)
+        self.to_unlock.add(channel)
 
     def _call(self, rpc, **kwargs) -> bool:
         try:

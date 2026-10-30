@@ -140,6 +140,8 @@ class ReadUntilClient(object):
         # Stores the most recent read number that a decision has been made on (stop_receiving/unblock)
         self.channel_read_latest_decision = defaultdict(str)
 
+        # channel - read_id for reads whose chunks bypass the strand prefilter
+        self.protected_reads = {}
         try:
             self.connection = Connection(
                 host=self.mk_host, port=self.mk_grpc_port, credentials=mk_credentials
@@ -279,7 +281,7 @@ class ReadUntilClient(object):
         self.action_queue = queue.Queue()
 
         self.channel_read_latest_decision = defaultdict(str)
-
+        self.protected_reads = {}
         # the data_queue is used to store the latest chunk per channel
         self.data_queue = self.CacheType(size=self.cache_size)
         # stores all sent action ids -> unblock/stop
@@ -588,7 +590,8 @@ class ReadUntilClient(object):
                 strand_like = any(
                     [x in self.strand_classes for x in read.chunk_classifications]
                 )
-                if not self.filter_strands or strand_like:
+                protected = self.protected_reads.get(read_channel) == read.id
+                if not self.filter_strands or strand_like or protected:
                     self.data_queue[read_channel] = read
 
             now = time.time()
