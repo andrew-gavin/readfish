@@ -236,7 +236,13 @@ class Analysis:
         self.duplex_tracker = DuplexTracker()
 
         # Lock channel states for reads accepted with Action.lock
-        self.locker = ChannelLocker(self.client, self.logger)
+        self.locker = ChannelLocker(
+            self.client,
+            self.logger,
+            event_log=(
+                f"{self.run_information.run_id}_channel_locks.tsv" if debug_log else None
+            ),
+        )
         if conf_uses_lock(self.conf):
             self.locker.validate()
 
