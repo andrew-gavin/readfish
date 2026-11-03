@@ -40,6 +40,8 @@ LEASE_SECONDS = 2.0
 MAX_HOLD_SECONDS = 300.0
 #: Timeout, in seconds, for each lock or unlock RPC.
 RPC_TIMEOUT = 1.0
+#: Minimum max_unblock_read_length_seconds when locking is used
+LOCK_STREAM_SECONDS = 600.0
 #: Columns of the lock event TSV.
 EVENT_HEADER = "timestamp\tevent\tchannel\tread_id\theld_s\tgap_s\tclassifications"
 

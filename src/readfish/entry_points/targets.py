@@ -101,7 +101,7 @@ from readfish._cli_args import DEVICE_BASE_ARGS, Chemistry
 from readfish._read_until_client import RUClient
 from readfish._config import Action, Conf, make_decision, _Condition
 from readfish._statistics import ReadfishStatistics
-from readfish._channel_lock import ChannelLocker, conf_uses_lock ## DynamicLock logic
+from readfish._channel_lock import ChannelLocker, conf_uses_lock, LOCK_STREAM_SECONDS ## DynamicLock logic
 from readfish.__about__ import __version__
 from readfish._compatibility import (
     _get_minknow_version,
@@ -671,12 +671,19 @@ If there isn't a newer version of readfish and readfish is failing, please open 
         f"'readfish {args.command}' connected to this device.",
         Severity.WARN,
     )
-
+    # Locked reads must keep streaming for their whole length to renew their lease
+    max_unblock = args.max_unblock_read_length_seconds
+    if conf_uses_lock(conf) and max_unblock < LOCK_STREAM_SECONDS:
+        logger.warning(
+            f"Channel locking in use: raising max_unblock_read_length_seconds "
+            f"from {max_unblock} to {LOCK_STREAM_SECONDS}"
+        )
+        max_unblock = LOCK_STREAM_SECONDS
     # start the client running
     read_until_client.run(
         first_channel=1,
         last_channel=read_until_client.channel_count,
-        max_unblock_read_length_seconds=args.max_unblock_read_length_seconds,
+        max_unblock_read_length_seconds=max_unblock,
         accepted_first_chunk_classifications=[
             "strand",
             "strand2",
