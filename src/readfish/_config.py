@@ -36,14 +36,19 @@ def make_decision(conf: Conf, result: Result) -> Decision:
     """
     if result.alignment_data is None:
         result.alignment_data = []
-    targets = conf.get_targets(result.channel, result.barcode)
+    _, condition = conf.get_conditions(result.channel, result.barcode)
+    targets = condition.targets
     results = result.alignment_data
     matches = []
     for al in results:
         contig = al.ctg
         strand = al.strand
         coord = al.r_st if al.strand == -1 else al.r_en
-        matches.append(targets.check_coord(contig, strand, coord))
+        # Reads heading into a lock target count as on-target too
+        matches.append(
+            targets.check_coord(contig, strand, coord)
+            or condition.lock_targets.check_coord(contig, strand, coord)
+        )
     coord_match = any(matches)
 
     if not results:
@@ -72,6 +77,7 @@ class _Condition:
     :param no_seq: The :class:`Action` to perform when a read did not basecall
     :param control: Whether the region should be treated as a control. Defaults to False
     :param targets: The target sequences for the condition. See :class:`Targets` for details
+    :param lock_targets: Targets whose on-target reads are given :class:`Action` ``lock`` instead of the ``single_on``/``multi_on`` action. Defaults to none 
     :param min_chunks: The minimum number of chunks required before a decision will be made. Defaults to 1
     :param max_chunks: The maximum number of chunks that readfish will assess for any single read. Defaults to 2
     :param below_min_chunks: The :class:`Action` to take when we haven't evaluated at least ``min_chunks``. Defaults to ``Action.proceed``
@@ -87,6 +93,7 @@ class _Condition:
     no_seq: Action
     control: bool = attrs.field(default=False)
     targets: Targets = attrs.field(default=attrs.Factory(Targets))
+    lock_targets: Targets = attrs.field(default=attrs.Factory(Targets))
     min_chunks: int = attrs.field(repr=False, default=1)
     max_chunks: int = attrs.field(repr=False, default=2)
     below_min_chunks: Action = attrs.field(default=Action.proceed)
@@ -98,6 +105,20 @@ class _Condition:
         :param decision: :class:`Decision` for a read
         """
         return getattr(self, decision.name)
+
+    def in_lock_targets(self, result: Result) -> bool:
+        """True if any alignment's leading edge falls in ``lock_targets``.
+
+        :param result: The basecalled and aligned read
+        """
+        if not self.lock_targets.value:
+            return False
+        return any(
+            self.lock_targets.check_coord(
+                al.ctg, al.strand, al.r_st if al.strand == -1 else al.r_en
+            )
+            for al in result.alignment_data or []
+        )
 
     def pretty_print(self) -> str:
         """

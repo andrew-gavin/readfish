@@ -522,6 +522,12 @@ class Analysis:
                 )
                 result.decision = make_decision(self.conf, result)
                 action = condition.get_action(result.decision)
+                # On-target reads heading into a lock target are locked instead
+                if result.decision in (
+                    Decision.single_on,
+                    Decision.multi_on,
+                ) and condition.in_lock_targets(result):
+                    action = Action.lock
                 seen_count = self.chunk_tracker.seen(result.channel, result.read_id)
                 #  Check if there any conditions that override the action chose, exceed_max_chunks etc...
                 (
@@ -662,8 +668,10 @@ If there isn't a newer version of readfish and readfish is failing, please open 
     if padding := getattr(args, "padding", None):
         for region in conf.regions:
             region.targets.padding = padding
+            region.lock_targets.padding = padding                      
         for barcode in conf.barcodes:
             conf.barcodes[barcode].targets.padding = padding
+            conf.barcodes[barcode].lock_targets.padding = padding      
     logger.info(conf.describe_experiment())
 
     send_message(
