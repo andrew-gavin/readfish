@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 #: Must exist in MinKNOW's channel states configuration.
 LOCK_STATE_NAME = "locked_target"
 #: Seconds a lock survives without a new chunk from the read holding it (T).
-LEASE_SECONDS = 2.0
+LEASE_SECONDS = 10.0
 #: Maximum seconds a single read may hold a lock.
 MAX_HOLD_SECONDS = 300.0
 #: Timeout, in seconds, for each lock or unlock RPC.
