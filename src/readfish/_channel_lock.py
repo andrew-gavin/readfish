@@ -50,7 +50,8 @@ def conf_uses_lock(conf: Conf) -> bool:
     """Return True if any region or barcode maps a decision to ``Action.lock``."""
     conditions = [*conf.regions, *conf.barcodes.values()]
     return any(
-        Action.lock in attrs.asdict(c, recurse=False).values() for c in conditions
+        Action.lock in attrs.asdict(c, recurse=False).values() or bool(c.lock_targets.value)
+        for c in conditions
     )
 
 
